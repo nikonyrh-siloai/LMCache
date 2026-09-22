@@ -4,6 +4,7 @@
 from dataclasses import dataclass, field
 from typing import TYPE_CHECKING, Any, Literal
 import enum
+import os
 
 # Third Party
 from vllm.distributed.kv_transfer.kv_connector.v1.base import (
@@ -54,6 +55,9 @@ class LMCacheMPRequestTracker:
     # Read-only list to track the token ids
     all_token_ids: ConstantList[int]
 
+    # Number of prompt tokens (excludes generated tokens)
+    num_prompt_tokens: int = 0
+
     # Block ids will be updated at update_states_after_alloc and
     # during generation. Keyed by engine_group_idx; non-HMA models use 0.
     allocated_block_ids: dict[int, list[int]] = field(default_factory=dict)
@@ -84,6 +88,7 @@ class LMCacheMPRequestTracker:
         self.cache_salt: str = request.cache_salt or ""
         self.request_configs = extract_request_configs_from_request(request)
         self.all_token_ids = request.all_token_ids
+        self.num_prompt_tokens = len(request.prompt_token_ids)
         self.allocated_block_ids = {}
         self.num_stored_tokens = 0
         self.num_vllm_hit_tokens = 0
@@ -247,6 +252,13 @@ class LMCacheMPRequestMetadata:
             allocated_tokens,
             computed_tokens,
         )
+        # Cap stores at prompt length to avoid storing decode chunks with
+        # non-deterministic output tokens (see LMCache/LMCache#5230).
+        # Set LMCACHE_SKIP_DECODE_CACHE=1 to enable the cap.
+        if os.environ.get("LMCACHE_SKIP_DECODE_CACHE", "0") != 0:
+            min_available_tokens = min(
+                min_available_tokens, tracker.num_prompt_tokens
+            )
         num_staging_tokens = min_available_tokens - tracker.num_stored_tokens
         num_chunks = num_staging_tokens // lmcache_tokens_per_chunk
 
