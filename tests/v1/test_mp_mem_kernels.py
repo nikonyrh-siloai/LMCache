@@ -80,6 +80,10 @@ FORMAT_PARAMS = [
     (FMT_VLLM_FUSED_NHD, 4, 8, 256, True),
     (FMT_VLLM_CS_HND, 4, 8, 256, True),
     (FMT_VLLM_CS_NHD, 4, 8, 256, True),
+    # hs=256 forces thread_dim_x=32; nh=33 exceeds thread_dim_y's cap of 32
+    # by one head, forcing the head loop's second pass (regression test for
+    # Gemma-4's nh=64 full-attention groups; scaled down for CI memory).
+    (FMT_VLLM_FUSED_HND, 4, 33, 256, False),
 ]
 
 
@@ -309,6 +313,7 @@ TOTAL_BLOCKS = NUM_MEMORY_OBJECTS * BLOCKS_PER_OBJECT  # 64
         "vllm_fused_nhd",
         "vllm_cs_hnd",
         "vllm_cs_nhd",
+        "vllm_fused_hnd_nh33",
     ],
 )
 @pytest.mark.parametrize(
@@ -418,6 +423,7 @@ def test_block_transfer_roundtrip(
         "vllm_fused_nhd",
         "vllm_cs_hnd",
         "vllm_cs_nhd",
+        "vllm_fused_hnd_nh33",
     ],
 )
 @pytest.mark.parametrize("dtype", [torch.bfloat16], ids=["bf16"])
