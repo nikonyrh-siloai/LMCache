@@ -389,7 +389,8 @@ class TestL2MetricsSubscriptions:
         assert EventType.L2_PREFETCH_LOAD_SUBMITTED in subs
         assert EventType.L2_PREFETCH_LOAD_COMPLETED in subs
         assert EventType.L2_KEYS_EVICTED in subs
-        assert len(subs) == 7
+        assert EventType.L2_STORE_DROPPED in subs
+        assert len(subs) == 8
 
 
 # ---------------------------------------------------------------------------

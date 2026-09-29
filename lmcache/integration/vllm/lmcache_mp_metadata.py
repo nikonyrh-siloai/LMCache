@@ -293,9 +293,7 @@ class LMCacheMPRequestMetadata:
         # non-deterministic output tokens (see LMCache/LMCache#5230).
         # Set LMCACHE_SKIP_DECODE_CACHE=1 to enable the cap.
         if os.environ.get("LMCACHE_SKIP_DECODE_CACHE") == "1":
-            min_available_tokens = min(
-                min_available_tokens, tracker.num_prompt_tokens
-            )
+            min_available_tokens = min(min_available_tokens, tracker.num_prompt_tokens)
         if tracker.max_offload_tokens is not None:
             min_available_tokens = min(min_available_tokens, tracker.max_offload_tokens)
         num_staging_tokens = min_available_tokens - tracker.num_stored_tokens
