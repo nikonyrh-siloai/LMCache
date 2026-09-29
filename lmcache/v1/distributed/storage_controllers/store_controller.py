@@ -29,9 +29,9 @@ from lmcache.v1.distributed.storage_controllers.adapter_lifecycle import (
     RemoveAdapterOp,
 )
 from lmcache.v1.distributed.storage_controllers.store_policy import (
-    AdapterDescriptor,
     StorePolicy,
 )
+from lmcache.v1.distributed.storage_controllers.utils import L2AdapterDescriptor
 from lmcache.v1.mp_observability.event import Event, EventType
 from lmcache.v1.mp_observability.event_bus import get_event_bus
 from lmcache.v1.mp_observability.otel_init import register_gauge
@@ -227,7 +227,7 @@ class StoreController(StorageControllerInterface):
         self,
         l1_manager: L1Manager,
         l2_adapters: list[L2AdapterInterface],
-        adapter_descriptors: list[AdapterDescriptor],
+        adapter_descriptors: list[L2AdapterDescriptor],
         policy: StorePolicy,
         max_inflight_tasks: int = 0,
     ) -> None:
@@ -243,7 +243,7 @@ class StoreController(StorageControllerInterface):
             desc.index: adapter
             for desc, adapter in zip(adapter_descriptors, l2_adapters, strict=True)
         }
-        self._adapter_descriptors: dict[int, AdapterDescriptor] = {
+        self._adapter_descriptors: dict[int, L2AdapterDescriptor] = {
             desc.index: desc for desc in adapter_descriptors
         }
         self._policy = policy
@@ -352,7 +352,7 @@ class StoreController(StorageControllerInterface):
         self,
         adapter_id: int,
         adapter: L2AdapterInterface,
-        descriptor: AdapterDescriptor,
+        descriptor: L2AdapterDescriptor,
     ) -> None:
         """Blocking function to add a new adapter into the store controller
         with the specified adapter ID and descriptor.
@@ -709,7 +709,16 @@ class StoreController(StorageControllerInterface):
                 continue
 
             adapter = self._l2_adapters[adapter_index]
-            task_id = adapter.submit_store_task(successful_keys, successful_objs)
+            try:
+                task_id = adapter.submit_store_task(successful_keys, successful_objs)
+            except Exception:
+                logger.exception(
+                    "Failed to submit store task to adapter %d for %d keys.",
+                    adapter_index,
+                    len(successful_keys),
+                )
+                l1_mgr.finish_read(successful_keys)
+                continue
 
             self._in_flight_tasks[(adapter_index, task_id)] = InFlightStoreTask(
                 adapter_index=adapter_index,
